@@ -1,55 +1,105 @@
-import { motion, useReducedMotion } from 'motion/react'
+import { useEffect, useState } from 'react'
+import { motion, useReducedMotion, type TargetAndTransition } from 'motion/react'
+import { BAG } from '../data/bag'
 import type { Stage } from '../lib/stage'
 
 type Props = {
   stage: Stage
   open: boolean
   canOpen: boolean
+  /** Open and everything settled: clicking puts everything back. */
+  canPack: boolean
+  /** Something is being dragged over the bag. */
+  dropTarget: boolean
   dimmed: boolean
+  /** Vertical offset from the open position (the closed bag sits under the intro). */
+  shift: number
   closedSrc: string | null
   openSrc: string | null
   onOpen: () => void
+  onPack: () => void
 }
 
-export function Bag({ stage, open, canOpen, dimmed, closedSrc, openSrc, onOpen }: Props) {
+/** The open bag's body — where objects can be dropped back in (viewport coords). */
+export function bagBody(stage: Stage) {
+  const { cx, top, width, height } = stage.bag
+  return { left: cx - width / 2, right: cx + width / 2, top: top + height * BAG.mouth - 16 * stage.unit, bottom: top + height }
+}
+
+export function Bag(props: Props) {
+  const { stage, open, canOpen, canPack, dropTarget, dimmed, closedSrc, openSrc } = props
   const reduce = useReducedMotion()
   const { cx, top, width, height } = stage.bag
+  const [hovered, setHovered] = useState(false)
+  const clickable = canOpen || canPack
+
+  useEffect(() => setHovered(false), [open])
+
+  // Closed: lean in, inviting a click. Open: shrink and wiggle, as if the
+  // handles are being lifted to tip everything back in.
+  let pose: TargetAndTransition = { scale: 1, rotate: 0 }
+  if (!reduce && canOpen && hovered) pose = { scale: 1.035, rotate: -1.5 }
+  if (!reduce && open && ((canPack && hovered) || dropTarget))
+    pose = {
+      scale: 0.92,
+      rotate: [0, -3, 2.5, -1.5, 0],
+      transition: { scale: { type: 'spring', stiffness: 320, damping: 20 }, rotate: { duration: 0.6, ease: 'easeInOut' } },
+    }
 
   return (
     <motion.button
       type="button"
       className="bag"
       data-dimmed={dimmed || undefined}
-      aria-label={canOpen ? 'Open the bag' : 'The bag'}
-      aria-disabled={!canOpen}
-      onClick={() => canOpen && onOpen()}
-      // Once open, the bag's (mostly transparent) box must not block objects
-      // sitting above it.
-      style={{ left: cx - width / 2, top, width, height, pointerEvents: canOpen ? 'auto' : 'none' }}
-      whileHover={canOpen && !reduce ? { scale: 1.035, rotate: -1.5 } : undefined}
-      whileTap={canOpen ? { scale: 0.97 } : undefined}
-      transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+      aria-label={canOpen ? 'Open the bag' : canPack ? 'Put everything back in the bag' : 'The bag'}
+      aria-disabled={!clickable}
+      tabIndex={clickable ? 0 : -1}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (canOpen) props.onOpen()
+        else if (canPack) props.onPack()
+      }}
+      // Only the hit area below takes the pointer; the (mostly transparent)
+      // box must not block objects sitting around the bag.
+      style={{ left: cx - width / 2, top, width, height }}
+      initial={false}
+      animate={{ y: props.shift }}
+      whileTap={clickable ? { scale: 0.97 } : undefined}
+      transition={{ y: { type: 'spring', stiffness: 240, damping: 30 } }}
     >
-      <span className="bag-shadow" aria-hidden />
+      <span
+        className="bag-hit"
+        style={{ top: open ? `${BAG.mouth * 100 - 3}%` : 0, pointerEvents: clickable ? 'auto' : 'none' }}
+        onPointerEnter={(e) => e.pointerType === 'mouse' && setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      />
       <motion.div
-        className="bag-body"
-        animate={
-          open
-            ? { y: 0, scaleX: [1, 1.04, 0.99, 1], scaleY: [1, 0.93, 1.03, 1], transition: { duration: 0.55 } }
-            : reduce
-              ? { y: 0 }
-              : { y: [0, -5, 0], transition: { repeat: Infinity, duration: 2.8, ease: 'easeInOut' } }
-        }
-        style={{ transformOrigin: '50% 100%' }}
+        className="bag-tilt"
+        animate={pose}
+        transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+        style={{ transformOrigin: '50% 80%' }}
       >
-        {closedSrc ? (
-          <>
-            <img src={closedSrc} alt="" draggable={false} className="bag-img" style={{ opacity: open ? 0 : 1 }} />
-            <img src={openSrc ?? closedSrc} alt="" draggable={false} className="bag-img" style={{ opacity: open ? 1 : 0 }} />
-          </>
-        ) : (
-          <BagArt open={open} />
-        )}
+        <span className="bag-shadow" aria-hidden />
+        <motion.div
+          className="bag-body"
+          animate={
+            open
+              ? { y: 0, scaleX: [1, 1.04, 0.99, 1], scaleY: [1, 0.93, 1.03, 1], transition: { duration: 0.55 } }
+              : reduce
+                ? { y: 0 }
+                : { y: [0, -5, 0], transition: { repeat: Infinity, duration: 2.8, ease: 'easeInOut' } }
+          }
+          style={{ transformOrigin: '50% 100%' }}
+        >
+          {closedSrc ? (
+            <>
+              <img src={closedSrc} alt="" draggable={false} className="bag-img" style={{ opacity: open ? 0 : 1 }} />
+              <img src={openSrc ?? closedSrc} alt="" draggable={false} className="bag-img" style={{ opacity: open ? 1 : 0 }} />
+            </>
+          ) : (
+            <BagArt open={open} />
+          )}
+        </motion.div>
       </motion.div>
     </motion.button>
   )

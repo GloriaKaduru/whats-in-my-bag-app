@@ -21,7 +21,7 @@ export function Completion({ count, onRepack, onReplay }: Props) {
         exit={{ opacity: 0, y: 16, transition: { duration: 0.18 } }}
         transition={{ type: 'spring', stiffness: 260, damping: 22 }}
       >
-        <p className="complete-title">You found everything ✨</p>
+        <p className="complete-title">Yay, you found everything!</p>
         <p className="complete-sub">All {count} little things, accounted for.</p>
         <div className="complete-actions">
           <button type="button" className="btn btn-primary" onClick={onRepack}>

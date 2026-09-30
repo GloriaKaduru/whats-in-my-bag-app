@@ -1,5 +1,15 @@
-import { useEffect } from 'react'
-import { motion, useReducedMotion, type Variants } from 'motion/react'
+import { useEffect, useRef } from 'react'
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+  useVelocity,
+  type Variants,
+} from 'motion/react'
 import type { BagItem } from '../data/bag'
 import { placeItem, type Stage } from '../lib/stage'
 import { sound } from '../lib/sound'
@@ -13,6 +23,8 @@ import { ObjectArt } from './ObjectArt'
  */
 export type ObjectMode = 'hidden' | 'out' | 'rest' | 'in'
 
+export type Point = { x: number; y: number }
+
 type Props = {
   item: BagItem
   index: number
@@ -20,9 +32,14 @@ type Props = {
   stage: Stage
   mode: ObjectMode
   src: string | null
+  contents: Record<string, string | null>
   interactive: boolean
   active: boolean
   dimmed: boolean
+  /** Not looked at yet: shows the pulsing dot. */
+  unseen: boolean
+  dragging: boolean
+  zIndex: number
   onSettled: (id: string) => void
   onPacked: (id: string) => void
   onHoverStart: (id: string) => void
@@ -30,11 +47,16 @@ type Props = {
   onSelect: (id: string) => void
   onFocusIn: (id: string) => void
   onFocusOut: (id: string) => void
+  onDragStart: (id: string) => void
+  onDrag: (id: string, point: Point) => void
+  onDragEnd: (id: string, point: Point) => void
   registerRef: (id: string, el: HTMLElement | null) => void
 }
 
-const OPEN_DELAY = 0.3
+const OPEN_DELAY = 0.38
 const STAGGER = 0.12
+/** Keep dragged objects reachable: their centre stays this far inside the screen. */
+const EDGE = 36
 
 type Path = ReturnType<typeof paths>
 
@@ -115,10 +137,46 @@ const variants: Variants = {
 }
 
 export function BagObject(props: Props) {
-  const { item, index, count, stage, mode, src, interactive, active, dimmed } = props
+  const { item, index, count, stage, mode, src, interactive, active, dimmed, unseen, dragging } = props
   const reduce = !!useReducedMotion()
   const path = paths(item, index, stage)
   const delay = mode === 'in' ? (count - 1 - index) * 0.07 : OPEN_DELAY + index * STAGGER
+  const u = stage.unit
+
+  // Where the visitor has dragged it, relative to its resting spot. Stored as
+  // a fraction of the screen too, so a resize keeps it in proportion.
+  const dx = useMotionValue(0)
+  const dy = useMotionValue(0)
+  const offset = useRef({ x: 0, y: 0 })
+  const moved = useRef(false)
+
+  // Lean into the direction of travel while dragging.
+  const vx = useVelocity(dx)
+  const lean = useSpring(useTransform(vx, [-1600, 1600], [-9, 9], { clamp: true }), { stiffness: 320, damping: 26 })
+
+  useEffect(() => {
+    dx.set(offset.current.x * stage.width)
+    dy.set(offset.current.y * stage.height)
+  }, [stage, dx, dy])
+
+  useEffect(() => {
+    if (mode === 'hidden') {
+      offset.current = { x: 0, y: 0 }
+      dx.set(0)
+      dy.set(0)
+    }
+    // Packing: fold the drag offset away alongside the arc into the bag.
+    if (mode === 'in') {
+      offset.current = { x: 0, y: 0 }
+      const t = { duration: reduce ? 0.3 : 0.62, delay, ease: [0.4, 0, 0.6, 1] as const }
+      const a = animate(dx, 0, t)
+      const b = animate(dy, 0, t)
+      return () => {
+        a.stop()
+        b.stop()
+      }
+    }
+  }, [mode, delay, reduce, dx, dy])
 
   // A little pop as each object clears the bag.
   useEffect(() => {
@@ -127,11 +185,22 @@ export function BagObject(props: Props) {
     return () => clearTimeout(t)
   }, [mode, delay, index])
 
+  const { end } = path
+  const constraints = {
+    left: EDGE - end.x,
+    right: stage.width - EDGE - end.x,
+    top: (stage.mobile ? 96 : 110) * u - end.y,
+    bottom: stage.height - EDGE - end.y,
+  }
+
+  const hotspot = item.hotspot ?? { x: 0.5, y: 0.5 }
+  const lifted = active || dragging
+
   return (
     <motion.div
       className="object"
       data-dimmed={dimmed || undefined}
-      style={{ zIndex: active ? 30 : 5 + index }}
+      style={{ zIndex: props.zIndex }}
       custom={{ ...path, delay, reduce }}
       variants={variants}
       initial="hidden"
@@ -142,36 +211,110 @@ export function BagObject(props: Props) {
       }}
     >
       <motion.div
-        className="object-lift"
-        animate={
-          active && !reduce
-            ? { scale: 1.08, y: -8 * stage.unit, rotate: -path.end.rotate * 0.35 }
-            : { scale: 1, y: 0, rotate: 0 }
-        }
-        transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+        className="object-drag"
+        style={{ x: dx, y: dy, rotate: lean }}
+        drag={interactive}
+        dragConstraints={constraints}
+        dragElastic={0.14}
+        dragTransition={{ power: 0.18, timeConstant: 180, bounceStiffness: 420, bounceDamping: 32 }}
+        onPointerDownCapture={() => (moved.current = false)}
+        onDragStart={() => {
+          moved.current = true
+          sound.tick(item.tone + 5)
+          props.onDragStart(item.id)
+        }}
+        onDrag={(_, info) => props.onDrag(item.id, info.point)}
+        onDragEnd={(_, info) => {
+          sound.pop(index)
+          props.onDragEnd(item.id, info.point)
+        }}
+        onDragTransitionEnd={() => {
+          offset.current = { x: dx.get() / stage.width, y: dy.get() / stage.height }
+        }}
       >
-        <button
-          ref={(el) => props.registerRef(item.id, el)}
-          type="button"
-          className="object-button"
-          data-object={item.id}
-          data-active={active || undefined}
-          tabIndex={interactive ? 0 : -1}
-          aria-hidden={mode === 'hidden' || undefined}
-          aria-label={item.name}
-          aria-expanded={active}
-          style={{ width: path.end.width, pointerEvents: interactive ? 'auto' : 'none' }}
-          onPointerEnter={(e) => e.pointerType === 'mouse' && interactive && props.onHoverStart(item.id)}
-          onPointerLeave={(e) => e.pointerType === 'mouse' && props.onHoverEnd(item.id)}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (interactive) props.onSelect(item.id)
-          }}
-          onFocus={(e) => interactive && e.currentTarget.matches(':focus-visible') && props.onFocusIn(item.id)}
-          onBlur={() => props.onFocusOut(item.id)}
+        <motion.div
+          className="object-lift"
+          animate={
+            lifted && !reduce
+              ? {
+                  scale: dragging ? 1.06 : 1.08,
+                  y: -8 * u,
+                  rotate: dragging ? 0 : -end.rotate * 0.35,
+                }
+              : { scale: 1, y: 0, rotate: 0 }
+          }
+          transition={{ type: 'spring', stiffness: 380, damping: 20 }}
         >
-          {src ? <img src={src} alt="" draggable={false} /> : <ObjectArt art={item.art} />}
-        </button>
+          {item.contents && (
+            <div className="object-contents" aria-hidden>
+              {item.contents.map((c, i) => {
+                const csrc = props.contents[c.id]
+                if (!csrc) return null
+                const shown = active && !dragging
+                return (
+                  <span key={c.id} className="object-content" style={{ left: c.x * u, top: c.y * u }}>
+                    <motion.img
+                      src={csrc}
+                      alt=""
+                      draggable={false}
+                      style={{ height: c.height * u }}
+                      initial={false}
+                      animate={
+                        shown
+                          ? { opacity: 1, y: 0, scale: 1, rotate: c.rotate }
+                          : { opacity: 0, y: 36 * u, scale: 0.6, rotate: 0 }
+                      }
+                      transition={
+                        shown
+                          ? { type: 'spring', stiffness: 360, damping: 20, delay: reduce ? 0 : 0.04 + i * 0.05 }
+                          : { duration: 0.14 }
+                      }
+                    />
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          <button
+            ref={(el) => props.registerRef(item.id, el)}
+            type="button"
+            className="object-button"
+            data-object={item.id}
+            data-hand="grab"
+            data-active={active || undefined}
+            data-dragging={dragging || undefined}
+            tabIndex={interactive ? 0 : -1}
+            aria-hidden={mode === 'hidden' || undefined}
+            aria-label={item.name}
+            aria-expanded={active}
+            style={{ width: end.width, pointerEvents: interactive ? 'auto' : 'none' }}
+            onPointerEnter={(e) => e.pointerType === 'mouse' && interactive && props.onHoverStart(item.id)}
+            onPointerLeave={(e) => e.pointerType === 'mouse' && props.onHoverEnd(item.id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              // The click that ends a drag isn't a tap.
+              if (moved.current) return
+              if (interactive) props.onSelect(item.id)
+            }}
+            onFocus={(e) => interactive && e.currentTarget.matches(':focus-visible') && props.onFocusIn(item.id)}
+            onBlur={() => props.onFocusOut(item.id)}
+          >
+            {src ? <img src={src} alt="" draggable={false} /> : <ObjectArt art={item.art} />}
+            <AnimatePresence>
+              {unseen && interactive && (
+                <motion.span
+                  key="dot"
+                  className="object-dot"
+                  style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }}
+                  initial={{ opacity: 0, scale: 0.4 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.4, transition: { duration: 0.25 } }}
+                  aria-hidden
+                />
+              )}
+            </AnimatePresence>
+          </button>
+        </motion.div>
       </motion.div>
     </motion.div>
   )

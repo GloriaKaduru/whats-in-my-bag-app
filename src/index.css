@@ -135,22 +135,47 @@ button {
   inset: 0 0 auto;
   z-index: 60;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: max(20px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
   pointer-events: none;
 }
 
-.hud > * {
+.hud > *,
+.hud-right > * {
   pointer-events: auto;
+}
+
+.hud-id {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.byline {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .hud-title {
   font-family: var(--font-title);
   font-weight: 400;
   font-size: 22px;
+  line-height: 1.15;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.summary {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink-soft);
 }
 
 .hud-right {
@@ -158,6 +183,33 @@ button {
   align-items: center;
   gap: 14px;
   margin-left: auto;
+  pointer-events: none;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The same pulsing dot the unseen objects wear. */
+.peek-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.peek-hint::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pastel-blue);
+  box-shadow: 0 0 0 0 rgb(193 219 232 / 0.9);
+  animation: pulse 1.8s ease-out infinite;
 }
 
 .counter {
@@ -169,29 +221,54 @@ button {
   color: var(--ink-soft);
 }
 
-.counter-dots {
+.counter-slots {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
-.counter-dots i {
+/* Every slot is the same size, so the row never shifts as things are found. */
+.counter-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+
+.counter-slot i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--pastel-blue);
-  transition:
-    background-color 0.3s,
-    transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
-.counter-dots i[data-on] {
+.counter-slot img {
+  max-width: 24px;
+  max-height: 24px;
+  filter: drop-shadow(0 1px 1px rgb(var(--shadow) / 0.3));
+}
+
+/* Name of a found item on hover. */
+.counter-slot[data-name]:hover::after {
+  content: attr(data-name);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 5px 9px;
+  border-radius: 6px;
   background: var(--old-burgundy);
-  transform: scale(1.12);
+  color: var(--buttermilk);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .mute {
   display: grid;
   place-items: center;
+  flex: none;
   width: 36px;
   height: 36px;
   border: 0;
@@ -228,30 +305,40 @@ button {
   z-index: 40;
   display: grid;
   justify-items: center;
-  gap: 14px;
   padding: 0 16px;
   text-align: center;
   pointer-events: none;
 }
 
+.intro .byline {
+  font-size: clamp(11px, 1vw, 13px);
+  white-space: normal;
+  text-wrap: balance;
+}
+
 .intro-title {
+  margin-top: 10px;
   font-family: var(--font-title);
   font-weight: 400;
-  font-size: clamp(40px, 6.4vw, 78px);
+  /* Shrinks on short screens too, so the whole group always fits. */
+  font-size: clamp(36px, min(6.4vw, 8.5vh), 78px);
   line-height: 1.05;
   letter-spacing: -0.02em;
 }
 
-/* Pastel-blue highlighter swipe under the hint. */
+.intro .summary {
+  margin-top: 10px;
+  font-size: clamp(16px, 1.5vw, 19px);
+  text-wrap: balance;
+}
+
 .intro-hint {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 10px;
+  margin-top: 18px;
   font-size: clamp(15px, 1.4vw, 17px);
-  font-style: italic;
   color: var(--ink);
-  background: linear-gradient(transparent 45%, var(--pastel-blue) 45%, var(--pastel-blue) 90%, transparent 90%);
 }
 
 .intro-arrow {
@@ -269,9 +356,25 @@ button {
   border: 0;
   background: none;
   cursor: pointer;
+  /* Only .bag-hit takes the pointer. */
+  pointer-events: none;
   transition:
     filter 0.35s ease,
     opacity 0.35s ease;
+}
+
+.bag-hit {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 0;
+  z-index: 1;
+}
+
+.bag-tilt {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .bag:focus-visible {
@@ -328,39 +431,182 @@ button {
     opacity 0.35s ease;
 }
 
+.object-drag,
 .object-lift {
   position: absolute;
   left: 0;
   top: 0;
 }
 
+/*
+ * One shadow for every cut-out: a tight contact shadow plus a soft one, both
+ * scaled with the composition. Lifting (hover) and holding (drag) raise it.
+ */
 .object-button {
+  --lift: 1;
+  position: relative;
   display: block;
   padding: 0;
   border: 0;
   background: none;
-  cursor: pointer;
+  cursor: grab;
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 6px 6px rgb(var(--shadow) / 0.18)) drop-shadow(0 1px 1px rgb(var(--shadow) / 0.22));
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(1.5px * var(--u)) rgb(var(--shadow) / 0.26))
+    drop-shadow(0 calc(7px * var(--lift) * var(--u)) calc(9px * var(--lift) * var(--u)) rgb(var(--shadow) / 0.17));
   transition: filter 0.3s ease;
-  touch-action: manipulation;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .object-button img {
   display: block;
   width: 100%;
   height: auto;
-  user-select: none;
 }
 
 .object-button[data-active] {
-  filter: drop-shadow(0 20px 18px rgb(var(--shadow) / 0.22)) drop-shadow(0 4px 4px rgb(var(--shadow) / 0.16));
+  --lift: 2.4;
+}
+
+.object-button[data-dragging] {
+  --lift: 3.4;
+  cursor: grabbing;
 }
 
 .object-button:focus-visible {
   outline: 2px dashed var(--ink);
   outline-offset: 8px;
   border-radius: 6px;
+}
+
+/* “Not looked at yet.” Fades once the item's note has been read. */
+.object-dot {
+  position: absolute;
+  width: calc(12px * var(--u));
+  height: calc(12px * var(--u));
+  margin: calc(-6px * var(--u)) 0 0 calc(-6px * var(--u));
+  border-radius: 50%;
+  background: var(--pastel-blue);
+  border: 2px solid var(--card);
+  pointer-events: none;
+}
+
+.object-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  animation: pulse 1.8s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(193 219 232 / 0.95);
+  }
+  80%,
+  100% {
+    box-shadow: 0 0 0 calc(10px * var(--u, 1)) rgb(193 219 232 / 0);
+  }
+}
+
+/* Lip products fanning out of the purse, tucked behind it. */
+.object-contents {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.object-content {
+  position: absolute;
+  translate: -50% -50%;
+}
+
+.object-content img {
+  display: block;
+  width: auto;
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(1.5px * var(--u)) rgb(var(--shadow) / 0.26))
+    drop-shadow(0 calc(6px * var(--u)) calc(8px * var(--u)) rgb(var(--shadow) / 0.16));
+}
+
+/* ——— Hand cursor ——— */
+
+.hand-cursor,
+.hand-cursor * {
+  cursor: none !important;
+}
+
+.hand {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+  transition: opacity 0.15s;
+}
+
+.hand[data-visible] {
+  opacity: 1;
+}
+
+/* Origin is the pointer itself, so poses pivot around the fingertip. */
+.hand-pose {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  transition: transform 0.14s cubic-bezier(0.3, 1.4, 0.5, 1);
+  filter: drop-shadow(5px 10px 9px rgb(var(--shadow) / 0.22)) drop-shadow(1px 2px 2px rgb(var(--shadow) / 0.12));
+}
+
+.hand img {
+  position: absolute;
+  display: block;
+  transition: opacity 0.1s;
+}
+
+/* Fingertip = the pointer (hotspot 5.6% across, 0% down). */
+.hand-point {
+  width: 50px;
+  left: -2.8px;
+  top: 0;
+}
+
+/* The pointer sits inside the curled fingers, as if holding the object. */
+.hand-grab {
+  width: 58px;
+  left: -25px;
+  top: -24px;
+  opacity: 0;
+}
+
+.hand[data-pose='reach'] .hand-pose {
+  transform: rotate(-8deg) scale(1.05);
+}
+
+.hand[data-pose='press'] .hand-pose {
+  transform: scale(0.9);
+}
+
+.hand[data-pose='grab'] .hand-point {
+  opacity: 0;
+}
+
+.hand[data-pose='grab'] .hand-grab {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peek-hint::before,
+  .object-dot::after {
+    animation: none;
+  }
+  .hand-pose {
+    transition: none;
+  }
 }
 
 /* ——— Story card ——— */
@@ -423,24 +669,6 @@ button {
   line-height: 1.45;
   color: var(--ink);
   text-wrap: pretty;
-}
-
-/* ——— Hints ——— */
-
-.peek-hint {
-  position: absolute;
-  left: 50%;
-  bottom: max(24px, env(safe-area-inset-bottom));
-  z-index: 40;
-  translate: -50% 0;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--pastel-blue);
-  font-size: 14px;
-  font-style: italic;
-  color: var(--ink);
-  white-space: nowrap;
-  pointer-events: none;
 }
 
 /* ——— Completion ——— */
@@ -535,19 +763,60 @@ button {
   border-radius: 1px;
 }
 
+/* Mid widths: the hint tucks under the counter instead of beside it. */
+@media (max-width: 1180px) {
+  .status {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 2px;
+  }
+}
+
 @media (max-width: 759px) {
+  .hud {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-inline: max(16px, env(safe-area-inset-left));
+  }
+  .byline {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+  }
   .hud-title {
     font-size: 18px;
   }
-  .counter > span:last-child {
+  .summary {
+    font-size: 12.5px;
+  }
+  /* Progress moves to a tray along the bottom edge. */
+  .status {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .peek-hint {
+    font-size: 13px;
+  }
+  .counter-slot {
+    width: 22px;
+    height: 22px;
+  }
+  .counter-slot img {
+    max-width: 22px;
+    max-height: 22px;
+  }
+  .counter-slot[data-name]:hover::after {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+  .counter-label {
     display: none;
   }
-  .counter-dots {
-    gap: 3px;
-  }
-  .counter-dots i {
-    width: 7px;
-    height: 7px;
+  .complete {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 34px);
   }
   .card-name {
     font-size: 22px;

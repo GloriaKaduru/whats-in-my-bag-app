@@ -6,6 +6,8 @@ type Props = {
   item: BagItem
   anchor: DOMRect
   mobile: boolean
+  /** Fired once the card has fully appeared — that’s when an item counts as found. */
+  onShown: (id: string) => void
 }
 
 type Side = 'right' | 'left' | 'below' | 'above'
@@ -38,9 +40,13 @@ function place(anchor: DOMRect, w: number, h: number, mobile: boolean) {
   const horizontal: Side[] = midX > vw / 2 ? ['left', 'right'] : ['right', 'left']
   const vertical: Side[] = midY > vh / 2 ? ['above', 'below'] : ['below', 'above']
   const order = mobile ? [...vertical, ...horizontal] : [...horizontal, ...vertical]
-  const fits = ({ left, top }: { left: number; top: number }) =>
-    left >= MARGIN && top >= MARGIN && left + w <= vw - MARGIN && top + h <= vh - MARGIN
-  const side = order.find((s) => fits(spots[s])) ?? order[0]
+  // A side spot only has to fit across (it's nudged up or down into view
+  // below); an above/below spot only has to fit vertically.
+  const fitsX = (left: number) => left >= MARGIN && left + w <= vw - MARGIN
+  const fitsY = (top: number) => top >= MARGIN && top + h <= vh - MARGIN
+  const fits = (s: Side) =>
+    s === 'left' || s === 'right' ? fitsX(spots[s].left) && h <= vh - 2 * MARGIN : fitsY(spots[s].top)
+  const side = order.find(fits) ?? order[0]
   const spot = spots[side]
   // Whatever happens, stay inside the viewport (PRD §13).
   return {
@@ -50,7 +56,7 @@ function place(anchor: DOMRect, w: number, h: number, mobile: boolean) {
   }
 }
 
-export function StoryCard({ item, anchor, mobile }: Props) {
+export function StoryCard({ item, anchor, mobile, onShown }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   const [pos, setPos] = useState<ReturnType<typeof place> | null>(null)
@@ -75,6 +81,9 @@ export function StoryCard({ item, anchor, mobile }: Props) {
       animate={{ opacity: 1, scale: 1, rotate: tilt, x: 0, y: 0 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.12 } }}
       transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+      onAnimationComplete={(def) => {
+        if (pos && (def as { opacity?: number }).opacity === 1) onShown(item.id)
+      }}
     >
       <span className="card-tape" aria-hidden />
       <div className="card-paper" style={{ clipPath: TORN }}>

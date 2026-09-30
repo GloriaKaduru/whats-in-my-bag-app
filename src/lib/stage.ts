@@ -9,21 +9,38 @@ export type Stage = {
   unit: number
   /** cx/cy is the composition centre (the bag's body); top is the artwork's top edge. */
   bag: { cx: number; cy: number; top: number; width: number; height: number; mouthY: number }
+  /** Pixels that an item's `y: 1` stands for. */
+  spreadY: number
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
+
+/** Space kept clear for the header (byline, title, summary) … */
+const HEADER = { desktop: 96, mobile: 80 }
+/** … and along the bottom (the progress tray on phones). */
+const FOOTER = { desktop: 24, mobile: 60 }
+/** The furthest any item sits from the centre, vertically (see bag.ts). */
+const REACH = { desktop: 0.34, mobile: 0.37 }
 
 function measure(): Stage {
   const width = window.innerWidth
   const height = window.innerHeight
   const mobile = width < 760
+  const key = mobile ? 'mobile' : 'desktop'
   const unit = mobile
     ? clamp(Math.min(width / 390, height / 780), 0.78, 1.35)
     : clamp(Math.min(width / 1440, height / 900), 0.74, 1.4)
   const bagWidth = (mobile ? 190 : 310) * unit
   const bagHeight = bagWidth * BAG.aspect
+  // Centre the composition in the band between header and footer, and spread
+  // it just far enough that the outermost items (about half their height
+  // past their centre) stay inside that band.
+  const bandTop = HEADER[key]
+  const bandBottom = height - FOOTER[key]
   const cx = width / 2
-  const cy = height * (mobile ? 0.52 : 0.54)
+  const cy = (bandTop + bandBottom) / 2
+  const itemHalf = (mobile ? 50 : 72) * unit
+  const spreadY = clamp(((bandBottom - bandTop) / 2 - itemHalf) / REACH[key], 300, mobile ? 900 : 1000)
   const top = cy - bagHeight * BAG.focus
   return {
     width,
@@ -31,6 +48,7 @@ function measure(): Stage {
     mobile,
     unit,
     bag: { cx, cy, top, width: bagWidth, height: bagHeight, mouthY: top + bagHeight * BAG.mouth },
+    spreadY,
   }
 }
 
@@ -56,10 +74,9 @@ export function placeItem(item: BagItem, stage: Stage) {
   const p = stage.mobile ? item.mobile : item.desktop
   // Cap the spread so ultra-wide screens keep the composition tight.
   const spreadX = Math.min(stage.width, 1500)
-  const spreadY = Math.min(stage.height, stage.mobile ? 900 : 1000)
   return {
     x: stage.bag.cx + p.x * spreadX,
-    y: stage.bag.cy + p.y * spreadY,
+    y: stage.bag.cy + p.y * stage.spreadY,
     rotate: p.rotate,
     width: p.width * stage.unit,
   }

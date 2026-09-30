@@ -31,6 +31,18 @@ export type Placement = {
   width: number
 }
 
+/** Something tucked inside an object, revealed when you peek at it. */
+export type Content = {
+  id: string
+  image: string
+  /** Offset from the object's centre, in design pixels. */
+  x: number
+  y: number
+  rotate: number
+  /** Height in design pixels. */
+  height: number
+}
+
 export type BagItem = {
   id: string
   name: string
@@ -40,8 +52,20 @@ export type BagItem = {
   art: ArtKey
   /** Semitone offset for this object's hover sound. */
   tone: number
+  /**
+   * Where the “not seen yet” dot sits, as a fraction of the image box.
+   * Defaults to the centre; set it when the centre is empty space.
+   */
+  hotspot?: { x: number; y: number }
+  contents?: Content[]
   desktop: Placement
   mobile: Placement
+}
+
+/** Who the bag belongs to — shown above the title. */
+export const PROFILE = {
+  byline: ['Gloria', 'Designer', 'Corp member', 'Lagos'],
+  summary: 'things in my bag on a random Tuesday',
 }
 
 export const BAG = {
@@ -69,6 +93,7 @@ export const ITEMS: BagItem[] = [
     image: '/images/objects/nysc-id.webp',
     art: 'idcard',
     tone: 0,
+    hotspot: { x: 0.68, y: 0.78 },
     desktop: { x: -0.3, y: -0.26, rotate: -7, width: 165 },
     mobile: { x: -0.27, y: -0.33, rotate: -6, width: 100 },
   },
@@ -91,8 +116,8 @@ export const ITEMS: BagItem[] = [
     image: '/images/objects/keys.webp',
     art: 'keys',
     tone: 4,
-    desktop: { x: 0.36, y: -0.03, rotate: -10, width: 140 },
-    mobile: { x: 0.03, y: -0.19, rotate: -8, width: 80 },
+    desktop: { x: 0.36, y: -0.03, rotate: -10, width: 160 },
+    mobile: { x: 0.03, y: -0.19, rotate: -8, width: 92 },
   },
   {
     id: 'makeup',
@@ -102,6 +127,12 @@ export const ITEMS: BagItem[] = [
     image: '/images/objects/makeup-purse.webp',
     art: 'makeup',
     tone: 5,
+    // Fanned out above the pouch, as if spilling from the zip.
+    contents: [
+      { id: 'lip-liner', image: '/images/purse/lip-liner.webp', x: -40, y: -96, rotate: -22, height: 120 },
+      { id: 'lip-tint', image: '/images/purse/lip-tint.webp', x: 4, y: -104, rotate: -4, height: 112 },
+      { id: 'lip-gloss', image: '/images/purse/lip-gloss.webp', x: 46, y: -88, rotate: 10, height: 92 },
+    ],
     desktop: { x: -0.11, y: 0.33, rotate: -4, width: 135 },
     mobile: { x: -0.08, y: 0.36, rotate: -4, width: 86 },
   },
@@ -113,8 +144,8 @@ export const ITEMS: BagItem[] = [
     image: '/images/objects/laptop.webp',
     art: 'laptop',
     tone: -3,
-    desktop: { x: 0.19, y: -0.29, rotate: -3, width: 255 },
-    mobile: { x: 0.24, y: -0.33, rotate: -3, width: 142 },
+    desktop: { x: 0.19, y: -0.29, rotate: -3, width: 204 },
+    mobile: { x: 0.24, y: -0.33, rotate: -3, width: 114 },
   },
   {
     id: 'passport',
