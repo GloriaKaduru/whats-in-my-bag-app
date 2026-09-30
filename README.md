@@ -24,7 +24,6 @@ closed → open crossfade doesn't jump. Every source is optional, so a folder
 with only some of them regenerates just those. Besides the objects it picks up:
 
 - `lip tint`, `lip gloss`, `lip liner`: what spills out of the purse on hover
-- `hand point`, `hand grab`: the cursor hands (the pointing one is colour-matched to the other)
 - `cover`, `thumbnail`: rebuilt into `public/og-image.jpg` and the favicons
 
 Faces, names and ID numbers listed in `REDACT` (in the script) are blurred
@@ -57,7 +56,6 @@ from the bag’s centre as a fraction of the screen, `rotate` is in degrees and
 | `src/App.tsx` | State machine: loading → closed → opening → open → packing |
 | `src/components/Bag.tsx` | The bag, with its flap, idle bob and open squash |
 | `src/components/BagObject.tsx` | Emerge / rest / pack-back animations, hover lift, dragging, “not seen yet” dot |
-| `src/components/HandCursor.tsx` | Photographed hand that replaces the mouse cursor |
 | `src/components/StoryCard.tsx` | The torn-paper note, placed to stay inside the viewport |
 | `src/components/Completion.tsx` | “You found everything” note and confetti |
-| `src/lib/sound.ts` | Synthesized sounds (no audio files), with a saved mute toggle |
+| `src/lib/sound.ts` | Synthesized ticks and pops plus the recorded hover sounds in `public/sounds/`, with a saved mute toggle |
