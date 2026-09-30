@@ -1,0 +1,558 @@
+:root {
+  /* Palette */
+  --buttermilk: #fff1b5;
+  --pastel-blue: #c1dbe8;
+  --old-burgundy: #43302e;
+
+  /* Background: buttermilk washed almost to white. */
+  --paper: #fffdf3;
+  --paper-deep: #fff6d6;
+
+  /* Text is always Old Burgundy; softer tones are tints of it. */
+  --ink: var(--old-burgundy);
+  --ink-soft: rgb(67 48 46 / 0.72);
+  --ink-faint: rgb(67 48 46 / 0.38);
+  --card: #fffefa;
+  --shadow: 67 48 46;
+
+  --font-title: 'Lustria', Georgia, serif;
+  --font-body: 'Lato', system-ui, -apple-system, sans-serif;
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+p,
+h1,
+h2 {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--pastel-blue);
+  color: var(--ink);
+}
+
+/* ——— Scene ——— */
+
+.scene {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* Soft window light falling on a tabletop. */
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, #fffffb 0%, transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 120%, var(--paper-deep) 0%, transparent 60%),
+    var(--paper);
+}
+
+/* Faint grain over everything, like a photographed surface. */
+.scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .26 0 0 0 0 .19 0 0 0 0 .18 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ——— Loader ——— */
+
+.loader {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: var(--paper);
+  font-family: var(--font-title);
+  font-size: 22px;
+  color: var(--ink-soft);
+}
+
+.loader-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.loader-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pastel-blue);
+  animation: bob 1s ease-in-out infinite;
+}
+
+.loader-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.loader-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-5px);
+    background: var(--old-burgundy);
+  }
+}
+
+/* ——— HUD ——— */
+
+.hud {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(20px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+.hud-title {
+  font-family: var(--font-title);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.counter-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.counter-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pastel-blue);
+  transition:
+    background-color 0.3s,
+    transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.counter-dots i[data-on] {
+  background: var(--old-burgundy);
+  transform: scale(1.12);
+}
+
+.mute {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pastel-blue);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    transform 0.15s;
+}
+
+.mute:hover {
+  background: var(--old-burgundy);
+  color: var(--buttermilk);
+}
+
+.mute:active {
+  transform: scale(0.94);
+}
+
+.mute:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ——— Intro ——— */
+
+.intro {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.intro-title {
+  font-family: var(--font-title);
+  font-weight: 400;
+  font-size: clamp(40px, 6.4vw, 78px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* Pastel-blue highlighter swipe under the hint. */
+.intro-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: clamp(15px, 1.4vw, 17px);
+  font-style: italic;
+  color: var(--ink);
+  background: linear-gradient(transparent 45%, var(--pastel-blue) 45%, var(--pastel-blue) 90%, transparent 90%);
+}
+
+.intro-arrow {
+  width: 22px;
+  height: 22px;
+  margin-bottom: -4px;
+}
+
+/* ——— Bag ——— */
+
+.bag {
+  position: absolute;
+  z-index: 20;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition:
+    filter 0.35s ease,
+    opacity 0.35s ease;
+}
+
+.bag:focus-visible {
+  outline: none;
+}
+
+.bag:focus-visible .bag-body {
+  filter: drop-shadow(0 0 0 var(--pastel-blue)) drop-shadow(0 0 8px var(--pastel-blue));
+}
+
+.bag-body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 18px rgb(var(--shadow) / 0.2)) drop-shadow(0 4px 4px rgb(var(--shadow) / 0.16));
+}
+
+.bag-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity 0.25s ease;
+}
+
+.bag-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -4%;
+  height: 10%;
+  border-radius: 50%;
+  background: rgb(var(--shadow) / 0.24);
+  filter: blur(14px);
+}
+
+.bag[data-dimmed],
+.object[data-dimmed] {
+  filter: blur(2.5px);
+  opacity: 0.5;
+}
+
+/* ——— Objects ——— */
+
+.object {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transition:
+    filter 0.35s ease,
+    opacity 0.35s ease;
+}
+
+.object-lift {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.object-button {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 6px 6px rgb(var(--shadow) / 0.18)) drop-shadow(0 1px 1px rgb(var(--shadow) / 0.22));
+  transition: filter 0.3s ease;
+  touch-action: manipulation;
+}
+
+.object-button img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.object-button[data-active] {
+  filter: drop-shadow(0 20px 18px rgb(var(--shadow) / 0.22)) drop-shadow(0 4px 4px rgb(var(--shadow) / 0.16));
+}
+
+.object-button:focus-visible {
+  outline: 2px dashed var(--ink);
+  outline-offset: 8px;
+  border-radius: 6px;
+}
+
+/* ——— Story card ——— */
+
+.card {
+  position: fixed;
+  z-index: 70;
+  width: min(290px, calc(100vw - 24px));
+  pointer-events: none;
+  filter: drop-shadow(0 10px 16px rgb(var(--shadow) / 0.14)) drop-shadow(0 1px 2px rgb(var(--shadow) / 0.12));
+}
+
+.card-paper {
+  padding: 22px;
+  background: var(--card);
+}
+
+.card-tape {
+  position: absolute;
+  z-index: 1;
+  top: -9px;
+  left: 50%;
+  width: 72px;
+  height: 20px;
+  translate: -50% 0;
+  rotate: -3deg;
+  background: rgb(193 219 232 / 0.75);
+}
+
+.card-name {
+  font-family: var(--font-title);
+  font-size: 24px;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.card-desc {
+  margin-top: 6px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.card-label {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--pastel-blue);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.card-why {
+  margin-top: 8px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+/* ——— Hints ——— */
+
+.peek-hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 40;
+  translate: -50% 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--pastel-blue);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ——— Completion ——— */
+
+.complete {
+  position: absolute;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 80;
+  width: min(380px, calc(100vw - 32px));
+  margin-left: calc(min(380px, calc(100vw - 32px)) / -2);
+  padding: 20px 20px 16px;
+  text-align: center;
+  background: var(--buttermilk);
+  border-radius: 6px;
+  box-shadow:
+    0 14px 30px rgb(var(--shadow) / 0.16),
+    0 1px 2px rgb(var(--shadow) / 0.14);
+}
+
+.complete-title {
+  font-family: var(--font-title);
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.complete-sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.complete-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 0;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    transform 0.15s;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--old-burgundy);
+  color: var(--buttermilk);
+}
+
+.btn-primary:hover {
+  background: #5a413e;
+}
+
+.btn-ghost {
+  background: var(--pastel-blue);
+  color: var(--ink);
+}
+
+.btn-ghost:hover {
+  background: #aecfdf;
+}
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti span {
+  position: absolute;
+  top: 0;
+  border-radius: 1px;
+}
+
+@media (max-width: 759px) {
+  .hud-title {
+    font-size: 18px;
+  }
+  .counter > span:last-child {
+    display: none;
+  }
+  .counter-dots {
+    gap: 3px;
+  }
+  .counter-dots i {
+    width: 7px;
+    height: 7px;
+  }
+  .card-name {
+    font-size: 22px;
+  }
+  .card-why {
+    font-size: 15px;
+  }
+}
