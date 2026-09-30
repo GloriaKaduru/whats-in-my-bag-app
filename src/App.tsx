@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ITEMS } from './data/bag'
+import { ITEMS, PROFILE } from './data/bag'
 import { useStage } from './lib/stage'
 import { preloadAssets, type Assets } from './lib/preload'
 import { sound } from './lib/sound'
-import { Bag } from './components/Bag'
-import { BagObject, type ObjectMode } from './components/BagObject'
+import { Bag, bagBody } from './components/Bag'
+import { BagObject, type ObjectMode, type Point } from './components/BagObject'
 import { StoryCard } from './components/StoryCard'
 import { Completion } from './components/Completion'
+import { HandCursor, canUseHandCursor } from './components/HandCursor'
 
 type Phase = 'loading' | 'closed' | 'opening' | 'open' | 'packing'
 
-/** How long the cursor must rest on an object before it counts as found. */
-const HOVER_DWELL = 350
+/** The title block glides from the centre into the header when the bag opens. */
+const SHARED = { layout: { type: 'spring', stiffness: 170, damping: 26 } } as const
 
 export default function App() {
   const stage = useStage()
@@ -20,13 +21,20 @@ export default function App() {
   const [assets, setAssets] = useState<Assets | null>(null)
   const [settled, setSettled] = useState<Set<string>>(() => new Set())
   const [found, setFound] = useState<Set<string>>(() => new Set())
+  /** Objects dropped back into the bag one at a time. */
+  const [packed, setPacked] = useState<Set<string>>(() => new Set())
   const [active, setActive] = useState<string | null>(null)
   const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [overBag, setOverBag] = useState(false)
+  /** Most recently touched last — decides which object sits on top. */
+  const [stack, setStack] = useState<string[]>(() => ITEMS.map((i) => i.id))
   const [celebrating, setCelebrating] = useState(false)
   const [muted, setMuted] = useState(sound.isMuted)
+  const [introHeight, setIntroHeight] = useState(0)
 
   const buttons = useRef(new Map<string, HTMLElement>())
-  const dwell = useRef<number | undefined>(undefined)
+  const intro = useRef<HTMLDivElement>(null)
   const replay = useRef(false)
 
   const complete = found.size === ITEMS.length
@@ -37,6 +45,23 @@ export default function App() {
       setPhase('closed')
     })
   }, [])
+
+  // ——— Closed layout: byline, title, summary, hint and bag centred as one group ———
+  useLayoutEffect(() => {
+    const el = intro.current
+    if (!el) return
+    const measure = () => setIntroHeight(el.offsetHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [phase === 'closed'])
+
+  const gap = 26 * stage.unit
+  const groupHeight = introHeight + gap + stage.bag.height
+  const groupTop = Math.max(24, (stage.height - groupHeight) / 2)
+  const closedBagTop = groupTop + introHeight + gap
+  const bagShift = phase === 'closed' || phase === 'loading' ? closedBagTop - stage.bag.top : 0
 
   // ——— Opening ———
   const phaseRef = useRef(phase)
@@ -49,6 +74,7 @@ export default function App() {
     sound.unlock()
     sound.zip()
     setSettled(new Set())
+    setPacked(new Set())
     setPhase('opening')
   }, [])
 
@@ -67,10 +93,13 @@ export default function App() {
     })
   }, [])
 
+  // Everything back inside (all at once, or one drop at a time): close up.
   useEffect(() => {
-    if (phase !== 'packing' || settled.size > 0) return
+    if ((phase !== 'packing' && phase !== 'open') || settled.size > 0) return
     setPhase('closed')
     setFound(new Set())
+    setPacked(new Set())
+    setCelebrating(false)
   }, [phase, settled])
 
   // “Explore again”: once everything is back in, open the bag again.
@@ -84,11 +113,16 @@ export default function App() {
   const pack = (thenReplay: boolean) => {
     if (phase !== 'open') return
     replay.current = thenReplay
-    clearTimeout(dwell.current)
     setActive(null)
     setCelebrating(false)
     sound.whoosh()
     setPhase('packing')
+  }
+
+  const packOne = (id: string) => {
+    setActive(null)
+    sound.whoosh()
+    setPacked((p) => new Set(p).add(id))
   }
 
   // ——— Inspecting ———
@@ -96,46 +130,70 @@ export default function App() {
     setFound((f) => (f.has(id) ? f : new Set(f).add(id)))
   }, [])
 
-  const inspect = useCallback(
-    (id: string) => {
-      const item = ITEMS.find((i) => i.id === id)
-      if (item) sound.tick(item.tone)
-      setActive(id)
-    },
-    [],
-  )
+  const inspect = useCallback((id: string) => {
+    const item = ITEMS.find((i) => i.id === id)
+    if (item) sound.tick(item.tone)
+    setActive(id)
+  }, [])
 
   const onHoverStart = (id: string) => {
-    inspect(id)
-    clearTimeout(dwell.current)
-    dwell.current = window.setTimeout(() => markFound(id), HOVER_DWELL)
+    if (!dragging) inspect(id)
   }
 
-  const onHoverEnd = (id: string) => {
-    clearTimeout(dwell.current)
-    setActive((a) => (a === id ? null : a))
-  }
+  const onHoverEnd = (id: string) => setActive((a) => (a === id ? null : a))
 
   // Tap / click: toggles on touch, always opens on mouse.
   const onSelect = (id: string) => {
-    markFound(id)
     if (active !== id) return inspect(id)
     if (!window.matchMedia('(hover: hover)').matches) setActive(null)
   }
 
-  const onFocusIn = (id: string) => {
-    inspect(id)
-    markFound(id)
-  }
+  const onFocusIn = (id: string) => inspect(id)
 
   const onFocusOut = (id: string) => setActive((a) => (a === id ? null : a))
+
+  // ——— Dragging ———
+  const toTop = (id: string) => setStack((s) => [...s.filter((x) => x !== id), id])
+
+  const inBag = (p: Point) => {
+    const b = bagBody(stage)
+    return p.x > b.left && p.x < b.right && p.y > b.top && p.y < b.bottom
+  }
+
+  const onDragStart = (id: string) => {
+    setDragging(id)
+    setActive(null)
+    toTop(id)
+  }
+
+  const onDrag = (_: string, p: Point) => {
+    const over = inBag(p)
+    if (over !== overBag) setOverBag(over)
+  }
+
+  const onDragEnd = (id: string, p: Point) => {
+    setDragging(null)
+    setOverBag(false)
+    if (inBag(p)) return packOne(id)
+    // Put down: show its note again (which also counts it as found).
+    inspect(id)
+  }
 
   // Keep the card attached to the object (also across resizes).
   useEffect(() => {
     if (!active) return setAnchor(null)
     const measure = () => {
       const el = buttons.current.get(active)
-      if (el) setAnchor(el.getBoundingClientRect())
+      if (!el) return
+      let r = el.getBoundingClientRect()
+      // The purse's contents fan out above it; keep the card clear of them.
+      const contents = ITEMS.find((i) => i.id === active)?.contents
+      if (contents) {
+        const reach = (Math.max(...contents.map((c) => -c.y + c.height / 2)) + 14) * stage.unit
+        const top = Math.min(r.top, r.top + r.height / 2 - reach)
+        r = new DOMRect(r.left, top, r.width, r.bottom - top)
+      }
+      setAnchor(r)
     }
     // Wait for the lift animation to start so the rect is representative.
     const frame = requestAnimationFrame(measure)
@@ -172,19 +230,36 @@ export default function App() {
   }
 
   const modeFor = (id: string): ObjectMode => {
-    if (phase === 'packing') return 'in'
+    if (phase === 'packing' || packed.has(id)) return 'in'
     if (phase === 'opening') return settled.has(id) ? 'rest' : 'out'
     if (phase === 'open') return 'rest'
     return 'hidden'
+  }
+
+  // Behind the bag while travelling through its opening; above it once out.
+  const zFor = (id: string, index: number, mode: ObjectMode) => {
+    if (id === dragging) return 45
+    if (id === active) return 40
+    if (mode !== 'rest') return 5 + index
+    return 21 + stack.indexOf(id)
   }
 
   const activeItem = ITEMS.find((i) => i.id === active)
   const isOut = phase === 'opening' || phase === 'open' || phase === 'packing'
   const hint = stage.mobile ? 'tap' : 'click'
   const peekHint = stage.mobile ? 'tap anything to peek' : 'hover over anything to peek'
+  const handCursor = !!assets?.hands && canUseHandCursor()
+
+  const byline = PROFILE.byline.join(' · ')
+  const summary = `${ITEMS.length} ${PROFILE.summary}`
 
   return (
-    <main className="scene" onClick={() => setActive(null)}>
+    <main
+      className="scene"
+      // Shadows and other details scale with the composition.
+      style={{ '--u': stage.unit } as CSSProperties}
+      onClick={() => setActive(null)}
+    >
       <AnimatePresence>
         {phase === 'loading' && (
           <motion.div className="loader" key="loader" exit={{ opacity: 0, transition: { duration: 0.4 } }}>
@@ -201,32 +276,67 @@ export default function App() {
       {assets && (
         <>
           <header className="hud">
-            <motion.h1
-              className="hud-title"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isOut ? 1 : 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              What’s in my bag?
-            </motion.h1>
+            {isOut && (
+              <div className="hud-id">
+                <motion.p layoutId="byline" transition={SHARED} className="byline">
+                  {byline}
+                </motion.p>
+                <motion.h1 layoutId="title" transition={SHARED} className="hud-title">
+                  What’s in my bag?
+                </motion.h1>
+                <motion.p layoutId="summary" transition={SHARED} className="summary">
+                  {summary}
+                </motion.p>
+              </div>
+            )}
             <div className="hud-right">
               <AnimatePresence>
                 {isOut && (
                   <motion.div
-                    className="counter"
-                    aria-live="polite"
+                    className="status"
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                   >
-                    <span className="counter-dots" aria-hidden>
-                      {ITEMS.map((i) => (
-                        <i key={i.id} data-on={found.has(i.id) || undefined} />
-                      ))}
-                    </span>
-                    <span>
-                      {found.size} of {ITEMS.length} found
-                    </span>
+                    <AnimatePresence>
+                      {phase === 'open' && found.size === 0 && !active && (
+                        <motion.p
+                          key="peek"
+                          className="peek-hint"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1, transition: { delay: 0.4 } }}
+                          exit={{ opacity: 0 }}
+                        >
+                          {peekHint}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                    <div className="counter" aria-live="polite">
+                      <span className="counter-slots" aria-hidden>
+                        {ITEMS.map((i) => {
+                          const thumb = found.has(i.id) && assets.items[i.id]
+                          return (
+                            <span key={i.id} className="counter-slot" data-name={thumb ? i.name : undefined}>
+                              {thumb ? (
+                                <motion.img
+                                  src={thumb}
+                                  alt=""
+                                  draggable={false}
+                                  initial={{ scale: 0.2, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                                />
+                              ) : (
+                                <i />
+                              )}
+                            </span>
+                          )
+                        })}
+                      </span>
+                      <span className="counter-label">
+                        {found.size} of {ITEMS.length} found
+                      </span>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -249,70 +359,93 @@ export default function App() {
             {phase === 'closed' && (
               <motion.div
                 key="intro"
+                ref={intro}
                 className="intro"
-                style={{ bottom: stage.height - stage.bag.top + 20 * stage.unit }}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0, transition: { delay: 0.15, duration: 0.6 } }}
-                exit={{ opacity: 0, y: -10, transition: { duration: 0.25 } }}
+                style={{ top: groupTop }}
+                // Stay mounted briefly so the shared title can glide away.
+                exit={{ opacity: 1, transition: { duration: 0.3 } }}
               >
-                <h2 className="intro-title">What’s in my bag?</h2>
-                <p className="intro-hint">
+                <motion.p layoutId="byline" transition={SHARED} className="byline">
+                  {byline}
+                </motion.p>
+                <motion.h1 layoutId="title" transition={SHARED} className="intro-title">
+                  What’s in my bag?
+                </motion.h1>
+                <motion.p layoutId="summary" transition={SHARED} className="summary">
+                  {summary}
+                </motion.p>
+                <motion.p
+                  className="intro-hint"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: 0.25, duration: 0.5 } }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                >
                   go on, {hint} it <Arrow />
-                </p>
+                </motion.p>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {ITEMS.map((item, index) => (
-            <BagObject
-              key={item.id}
-              item={item}
-              index={index}
-              count={ITEMS.length}
+          {ITEMS.map((item, index) => {
+            const mode = modeFor(item.id)
+            return (
+              <BagObject
+                key={item.id}
+                item={item}
+                index={index}
+                count={ITEMS.length}
+                stage={stage}
+                mode={mode}
+                src={assets.items[item.id]}
+                contents={assets.contents}
+                interactive={
+                  !packed.has(item.id) && (phase === 'open' || (phase === 'opening' && settled.has(item.id)))
+                }
+                active={active === item.id}
+                dimmed={!!active && active !== item.id}
+                unseen={!found.has(item.id)}
+                dragging={dragging === item.id}
+                zIndex={zFor(item.id, index, mode)}
+                onSettled={onSettled}
+                onPacked={onPacked}
+                onHoverStart={onHoverStart}
+                onHoverEnd={onHoverEnd}
+                onSelect={onSelect}
+                onFocusIn={onFocusIn}
+                onFocusOut={onFocusOut}
+                onDragStart={onDragStart}
+                onDrag={onDrag}
+                onDragEnd={onDragEnd}
+                registerRef={(id, el) => (el ? buttons.current.set(id, el) : buttons.current.delete(id))}
+              />
+            )
+          })}
+
+          {(phase !== 'closed' || introHeight > 0) && (
+            <Bag
               stage={stage}
-              mode={modeFor(item.id)}
-              src={assets.items[item.id]}
-              interactive={phase === 'open' || (phase === 'opening' && settled.has(item.id))}
-              active={active === item.id}
-              dimmed={!!active && active !== item.id}
-              onSettled={onSettled}
-              onPacked={onPacked}
-              onHoverStart={onHoverStart}
-              onHoverEnd={onHoverEnd}
-              onSelect={onSelect}
-              onFocusIn={onFocusIn}
-              onFocusOut={onFocusOut}
-              registerRef={(id, el) => (el ? buttons.current.set(id, el) : buttons.current.delete(id))}
+              open={isOut}
+              canOpen={phase === 'closed'}
+              canPack={phase === 'open' && !dragging}
+              dropTarget={overBag}
+              dimmed={!!active}
+              shift={bagShift}
+              closedSrc={assets.bagClosed}
+              openSrc={assets.bagOpen}
+              onOpen={openBag}
+              onPack={() => pack(false)}
             />
-          ))}
-
-          <Bag
-            stage={stage}
-            open={isOut}
-            canOpen={phase === 'closed'}
-            dimmed={!!active}
-            closedSrc={assets.bagClosed}
-            openSrc={assets.bagOpen}
-            onOpen={openBag}
-          />
+          )}
 
           <AnimatePresence>
-            {activeItem && anchor && (
-              <StoryCard key={activeItem.id} item={activeItem} anchor={anchor} mobile={stage.mobile} />
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {phase === 'open' && found.size === 0 && !active && (
-              <motion.p
-                key="peek"
-                className="peek-hint"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1, transition: { delay: 0.4 } }}
-                exit={{ opacity: 0 }}
-              >
-                {peekHint}
-              </motion.p>
+            {activeItem && anchor && !dragging && (
+              <StoryCard
+                key={activeItem.id}
+                item={activeItem}
+                anchor={anchor}
+                mobile={stage.mobile}
+                onShown={markFound}
+              />
             )}
           </AnimatePresence>
 
@@ -321,6 +454,8 @@ export default function App() {
               <Completion key="done" count={ITEMS.length} onRepack={() => pack(false)} onReplay={() => pack(true)} />
             )}
           </AnimatePresence>
+
+          {handCursor && <HandCursor dragging={!!dragging} />}
         </>
       )}
     </main>
