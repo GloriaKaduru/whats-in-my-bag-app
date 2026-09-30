@@ -154,15 +154,6 @@ button {
   pointer-events: none;
 }
 
-.byline {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-
 .hud-title {
   font-family: var(--font-title);
   font-weight: 400;
@@ -310,14 +301,7 @@ button {
   pointer-events: none;
 }
 
-.intro .byline {
-  font-size: clamp(11px, 1vw, 13px);
-  white-space: normal;
-  text-wrap: balance;
-}
-
 .intro-title {
-  margin-top: 10px;
   font-family: var(--font-title);
   font-weight: 400;
   /* Shrinks on short screens too, so the whole group always fits. */
@@ -332,19 +316,22 @@ button {
   text-wrap: balance;
 }
 
-.intro-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 18px;
-  font-size: clamp(15px, 1.4vw, 17px);
-  color: var(--ink);
+/* ——— Credit ——— */
+
+.credit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 40;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-soft);
+  pointer-events: none;
 }
 
-.intro-arrow {
-  width: 22px;
-  height: 22px;
-  margin-bottom: -4px;
+.credit span {
+  color: var(--old-burgundy);
 }
 
 /* ——— Bag ——— */
@@ -530,85 +517,6 @@ button {
     drop-shadow(0 calc(6px * var(--u)) calc(8px * var(--u)) rgb(var(--shadow) / 0.16));
 }
 
-/* ——— Hand cursor ——— */
-
-.hand-cursor,
-.hand-cursor * {
-  cursor: none !important;
-}
-
-.hand {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 200;
-  pointer-events: none;
-  opacity: 0;
-  will-change: transform;
-  transition: opacity 0.15s;
-}
-
-.hand[data-visible] {
-  opacity: 1;
-}
-
-/* Origin is the pointer itself, so poses pivot around the fingertip. */
-.hand-pose {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform-origin: 0 0;
-  transition: transform 0.14s cubic-bezier(0.3, 1.4, 0.5, 1);
-  filter: drop-shadow(5px 10px 9px rgb(var(--shadow) / 0.22)) drop-shadow(1px 2px 2px rgb(var(--shadow) / 0.12));
-}
-
-.hand img {
-  position: absolute;
-  display: block;
-  transition: opacity 0.1s;
-}
-
-/* Fingertip = the pointer (hotspot 5.6% across, 0% down). */
-.hand-point {
-  width: 50px;
-  left: -2.8px;
-  top: 0;
-}
-
-/* The pointer sits inside the curled fingers, as if holding the object. */
-.hand-grab {
-  width: 58px;
-  left: -25px;
-  top: -24px;
-  opacity: 0;
-}
-
-.hand[data-pose='reach'] .hand-pose {
-  transform: rotate(-8deg) scale(1.05);
-}
-
-.hand[data-pose='press'] .hand-pose {
-  transform: scale(0.9);
-}
-
-.hand[data-pose='grab'] .hand-point {
-  opacity: 0;
-}
-
-.hand[data-pose='grab'] .hand-grab {
-  opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .peek-hint::before,
-  .object-dot::after {
-    animation: none;
-  }
-  .hand-pose {
-    transition: none;
-  }
-}
-
 /* ——— Story card ——— */
 
 .card {
@@ -622,18 +530,6 @@ button {
 .card-paper {
   padding: 22px;
   background: var(--card);
-}
-
-.card-tape {
-  position: absolute;
-  z-index: 1;
-  top: -9px;
-  left: 50%;
-  width: 72px;
-  height: 20px;
-  translate: -50% 0;
-  rotate: -3deg;
-  background: rgb(193 219 232 / 0.75);
 }
 
 .card-name {
@@ -706,7 +602,7 @@ button {
   justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 40px;
 }
 
 .btn {
@@ -776,10 +672,6 @@ button {
   .hud {
     padding-top: max(16px, env(safe-area-inset-top));
     padding-inline: max(16px, env(safe-area-inset-left));
-  }
-  .byline {
-    font-size: 9.5px;
-    letter-spacing: 0.12em;
   }
   .hud-title {
     font-size: 18px;

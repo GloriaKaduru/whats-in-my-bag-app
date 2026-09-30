@@ -85,7 +85,6 @@ export function StoryCard({ item, anchor, mobile, onShown }: Props) {
         if (pos && (def as { opacity?: number }).opacity === 1) onShown(item.id)
       }}
     >
-      <span className="card-tape" aria-hidden />
       <div className="card-paper" style={{ clipPath: TORN }}>
         <p className="card-name">{item.name}</p>
         <p className="card-desc">{item.description}</p>

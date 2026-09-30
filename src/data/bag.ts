@@ -1,3 +1,5 @@
+import type { EffectOptions } from '../lib/sound'
+
 /**
  * Everything the bag contains lives in this file.
  *
@@ -50,8 +52,12 @@ export type BagItem = {
   why: string
   image?: string
   art: ArtKey
-  /** Semitone offset for this object's hover sound. */
+  /** Semitone offset for this object's tick (drag, and hover when it has no sound). */
   tone: number
+  /** Recorded effect played on hover (never loops). */
+  sound?: string
+  /** Playback tweaks: max length (default 1.5 s), speed, fade-out. */
+  soundOptions?: EffectOptions
   /**
    * Where the “not seen yet” dot sits, as a fraction of the image box.
    * Defaults to the centre; set it when the centre is empty space.
@@ -62,10 +68,9 @@ export type BagItem = {
   mobile: Placement
 }
 
-/** Who the bag belongs to — shown above the title. */
+/** Shown under the title. */
 export const PROFILE = {
-  byline: ['Gloria', 'Designer', 'Corp member', 'Lagos'],
-  summary: 'things in my bag on a random Tuesday',
+  summary: 'things in Gloria’s bag on a random Tuesday',
 }
 
 export const BAG = {
@@ -91,6 +96,7 @@ export const ITEMS: BagItem[] = [
     description: 'My official NYSC ID.',
     why: 'Cos “Corper Wee” is not enough.',
     image: '/images/objects/nysc-id.webp',
+    sound: '/sounds/nysc-id.mp3',
     art: 'idcard',
     tone: 0,
     hotspot: { x: 0.68, y: 0.78 },
@@ -103,6 +109,7 @@ export const ITEMS: BagItem[] = [
     description: 'Small NYSC card with my details on it.',
     why: 'CDS today, so yes, this had to come with me. No card, no clearance.',
     image: '/images/objects/cds-card.webp',
+    sound: '/sounds/cds-card.mp3',
     art: 'cdscard',
     tone: 2,
     desktop: { x: -0.36, y: 0.04, rotate: 6, width: 175 },
@@ -114,6 +121,7 @@ export const ITEMS: BagItem[] = [
     description: 'Three tiny keys.',
     why: 'Because how else am I getting back inside?',
     image: '/images/objects/keys.webp',
+    sound: '/sounds/keys.mp3',
     art: 'keys',
     tone: 4,
     desktop: { x: 0.36, y: -0.03, rotate: -10, width: 160 },
@@ -125,6 +133,7 @@ export const ITEMS: BagItem[] = [
     description: 'A tiny pouch carrying lip glosses and lip liner.',
     why: 'You can’t be a baddie without the essentials.',
     image: '/images/objects/makeup-purse.webp',
+    sound: '/sounds/makeup.mp3',
     art: 'makeup',
     tone: 5,
     // Fanned out above the pouch, as if spilling from the zip.
@@ -142,6 +151,8 @@ export const ITEMS: BagItem[] = [
     description: 'Big and heavy and always with me.',
     why: 'Work never stops. Unfortunately.',
     image: '/images/objects/laptop.webp',
+    sound: '/sounds/laptop.mp3',
+    soundOptions: { max: 2 },
     art: 'laptop',
     tone: -3,
     desktop: { x: 0.19, y: -0.29, rotate: -3, width: 204 },
@@ -153,6 +164,8 @@ export const ITEMS: BagItem[] = [
     description: 'My brand-new passport.',
     why: 'Need to catch flights cos I’ve already caught feelings.',
     image: '/images/objects/passport.webp',
+    sound: '/sounds/passport.mp3',
+    soundOptions: { fade: 0.6 },
     art: 'passport',
     tone: 7,
     desktop: { x: -0.09, y: -0.33, rotate: 6, width: 100 },
@@ -164,6 +177,7 @@ export const ITEMS: BagItem[] = [
     description: 'A few naira notes.',
     why: 'Korope and keke don’t run on good intentions.',
     image: '/images/objects/cash.webp',
+    sound: '/sounds/cash.mp3',
     art: 'cash',
     tone: 9,
     desktop: { x: -0.3, y: 0.3, rotate: 4, width: 150 },
@@ -186,6 +200,7 @@ export const ITEMS: BagItem[] = [
     description: 'A tiny tube of Dior hand cream.',
     why: 'Can’t be walking around looking ashy.',
     image: '/images/objects/hand-cream.webp',
+    sound: '/sounds/handcream.mp3',
     art: 'handcream',
     tone: 14,
     desktop: { x: 0.22, y: 0.05, rotate: -12, width: 64 },
@@ -197,6 +212,7 @@ export const ITEMS: BagItem[] = [
     description: 'Big and clunky.',
     why: 'Because NEPA and I don’t have an agreement.',
     image: '/images/objects/power-bank.webp',
+    sound: '/sounds/powerbank.mp3',
     art: 'powerbank',
     tone: 1,
     desktop: { x: 0.15, y: 0.33, rotate: 4, width: 96 },
