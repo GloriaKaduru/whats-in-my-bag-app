@@ -1,6 +1,6 @@
 /**
- * Tiny synthesized sound kit (Web Audio) — no audio files to ship.
- * Every sound is quiet and short; the whole kit respects a persisted mute.
+ * Tiny sound kit (Web Audio): synthesized ticks and pops, plus the recorded
+ * per-object hover effects. The whole kit respects a persisted mute.
  */
 
 const MUTE_KEY = 'bag:muted'
@@ -8,6 +8,13 @@ const MUTE_KEY = 'bag:muted'
 let ctx: AudioContext | null = null
 let noise: AudioBuffer | null = null
 let muted = readMuted()
+
+/** Recorded effects, decoded once. */
+const effects = new Map<string, Promise<AudioBuffer | null>>()
+let playing: { src: AudioBufferSourceNode; gain: GainNode } | null = null
+const EFFECT_MAX = 1.5
+const EFFECT_VOLUME = 0.25
+const EFFECT_FADE = 0.15
 
 function readMuted() {
   try {
@@ -17,8 +24,7 @@ function readMuted() {
   }
 }
 
-function audio(): AudioContext | null {
-  if (muted) return null
+function context(): AudioContext | null {
   try {
     ctx ??= new AudioContext()
     if (ctx.state === 'suspended') void ctx.resume()
@@ -26,6 +32,38 @@ function audio(): AudioContext | null {
   } catch {
     return null
   }
+}
+
+function audio(): AudioContext | null {
+  return muted ? null : context()
+}
+
+function loadEffect(url: string) {
+  let buffer = effects.get(url)
+  if (!buffer) {
+    const c = context()
+    buffer = c
+      ? fetch(url)
+          .then((r) => r.arrayBuffer())
+          .then((data) => c.decodeAudioData(data))
+          .catch(() => {
+            console.warn(`[bag] Could not load sound "${url}".`)
+            return null
+          })
+      : Promise.resolve(null)
+    effects.set(url, buffer)
+  }
+  return buffer
+}
+
+function fadeOut(at: number) {
+  if (!playing) return
+  const { src, gain } = playing
+  gain.gain.cancelScheduledValues(at)
+  gain.gain.setValueAtTime(gain.gain.value, at)
+  gain.gain.linearRampToValueAtTime(0, at + EFFECT_FADE)
+  src.stop(at + EFFECT_FADE)
+  playing = null
 }
 
 function noiseBuffer(c: AudioContext) {
@@ -45,11 +83,21 @@ function envelope(c: AudioContext, peak: number, attack: number, release: number
   return g
 }
 
+export type EffectOptions = {
+  /** Longest it may play, in seconds. */
+  max?: number
+  /** Playback speed (1 = as recorded). */
+  rate?: number
+  /** Fade-out length at the end, in seconds. */
+  fade?: number
+}
+
 export const sound = {
   isMuted: () => muted,
 
   setMuted(next: boolean) {
     muted = next
+    if (next) sound.stopEffect()
     try {
       localStorage.setItem(MUTE_KEY, next ? '1' : '0')
     } catch {
@@ -60,6 +108,47 @@ export const sound = {
   /** Call from a user gesture so later sounds are allowed to play. */
   unlock() {
     audio()
+  },
+
+  /** Fetch and decode recorded effects ahead of the first hover. */
+  preload(urls: string[]) {
+    urls.forEach(loadEffect)
+  },
+
+  /** Play an object's recorded effect once, quietly and capped at `max` seconds. Replaces any playing one. */
+  effect(url: string, { max = EFFECT_MAX, rate = 1, fade = EFFECT_FADE }: EffectOptions = {}) {
+    const c = audio()
+    if (!c) return
+    fadeOut(c.currentTime)
+    void loadEffect(url).then((buffer) => {
+      if (!buffer || muted) return
+      const src = c.createBufferSource()
+      src.buffer = buffer
+      src.playbackRate.value = rate
+      const gain = c.createGain()
+      src.connect(gain).connect(c.destination)
+      const now = c.currentTime
+      // Real-time length once sped up.
+      const length = buffer.duration / rate
+      const end = Math.min(length, max)
+      gain.gain.setValueAtTime(EFFECT_VOLUME, now)
+      if (length > max || fade > EFFECT_FADE) {
+        gain.gain.setValueAtTime(EFFECT_VOLUME, now + Math.max(0, end - fade))
+        gain.gain.linearRampToValueAtTime(0, now + end)
+      }
+      src.start(now)
+      src.stop(now + end)
+      const entry = { src, gain }
+      src.onended = () => {
+        if (playing === entry) playing = null
+      }
+      playing = entry
+    })
+  },
+
+  /** Fade out the playing effect (hover ended). */
+  stopEffect() {
+    if (ctx) fadeOut(ctx.currentTime)
   },
 
   /** Soft wooden tick on hover, pitched per object. */

@@ -8,7 +8,6 @@ import { Bag, bagBody } from './components/Bag'
 import { BagObject, type ObjectMode, type Point } from './components/BagObject'
 import { StoryCard } from './components/StoryCard'
 import { Completion } from './components/Completion'
-import { HandCursor, canUseHandCursor } from './components/HandCursor'
 
 type Phase = 'loading' | 'closed' | 'opening' | 'open' | 'packing'
 
@@ -46,7 +45,7 @@ export default function App() {
     })
   }, [])
 
-  // ——— Closed layout: byline, title, summary, hint and bag centred as one group ———
+  // ——— Closed layout: title, summary and bag centred as one group ———
   useLayoutEffect(() => {
     const el = intro.current
     if (!el) return
@@ -57,7 +56,7 @@ export default function App() {
     return () => observer.disconnect()
   }, [phase === 'closed'])
 
-  const gap = 26 * stage.unit
+  const gap = 50 * stage.unit
   const groupHeight = introHeight + gap + stage.bag.height
   const groupTop = Math.max(24, (stage.height - groupHeight) / 2)
   const closedBagTop = groupTop + introHeight + gap
@@ -72,6 +71,7 @@ export default function App() {
     if (phaseRef.current !== 'closed') return
     phaseRef.current = 'opening'
     sound.unlock()
+    sound.preload(ITEMS.flatMap((i) => (i.sound ? [i.sound] : [])))
     sound.zip()
     setSettled(new Set())
     setPacked(new Set())
@@ -130,25 +130,34 @@ export default function App() {
     setFound((f) => (f.has(id) ? f : new Set(f).add(id)))
   }, [])
 
-  const inspect = useCallback((id: string) => {
+  // Hover (or a tap, touch's hover) plays the object's recorded effect;
+  // keyboard focus just ticks.
+  const inspect = useCallback((id: string, withEffect: boolean) => {
     const item = ITEMS.find((i) => i.id === id)
-    if (item) sound.tick(item.tone)
+    if (item?.sound && withEffect) sound.effect(item.sound, item.soundOptions)
+    else if (item) sound.tick(item.tone)
     setActive(id)
   }, [])
 
   const onHoverStart = (id: string) => {
-    if (!dragging) inspect(id)
+    if (!dragging) inspect(id, true)
   }
 
-  const onHoverEnd = (id: string) => setActive((a) => (a === id ? null : a))
+  const onHoverEnd = (id: string) => {
+    sound.stopEffect()
+    setActive((a) => (a === id ? null : a))
+  }
 
   // Tap / click: toggles on touch, always opens on mouse.
   const onSelect = (id: string) => {
-    if (active !== id) return inspect(id)
-    if (!window.matchMedia('(hover: hover)').matches) setActive(null)
+    if (active !== id) return inspect(id, true)
+    if (!window.matchMedia('(hover: hover)').matches) {
+      sound.stopEffect()
+      setActive(null)
+    }
   }
 
-  const onFocusIn = (id: string) => inspect(id)
+  const onFocusIn = (id: string) => inspect(id, false)
 
   const onFocusOut = (id: string) => setActive((a) => (a === id ? null : a))
 
@@ -176,7 +185,7 @@ export default function App() {
     setOverBag(false)
     if (inBag(p)) return packOne(id)
     // Put down: show its note again (which also counts it as found).
-    inspect(id)
+    inspect(id, false)
   }
 
   // Keep the card attached to the object (also across resizes).
@@ -246,11 +255,8 @@ export default function App() {
 
   const activeItem = ITEMS.find((i) => i.id === active)
   const isOut = phase === 'opening' || phase === 'open' || phase === 'packing'
-  const hint = stage.mobile ? 'tap' : 'click'
   const peekHint = stage.mobile ? 'tap anything to peek' : 'hover over anything to peek'
-  const handCursor = !!assets?.hands && canUseHandCursor()
 
-  const byline = PROFILE.byline.join(' · ')
   const summary = `${ITEMS.length} ${PROFILE.summary}`
 
   return (
@@ -278,9 +284,6 @@ export default function App() {
           <header className="hud">
             {isOut && (
               <div className="hud-id">
-                <motion.p layoutId="byline" transition={SHARED} className="byline">
-                  {byline}
-                </motion.p>
                 <motion.h1 layoutId="title" transition={SHARED} className="hud-title">
                   What’s in my bag?
                 </motion.h1>
@@ -365,24 +368,27 @@ export default function App() {
                 // Stay mounted briefly so the shared title can glide away.
                 exit={{ opacity: 1, transition: { duration: 0.3 } }}
               >
-                <motion.p layoutId="byline" transition={SHARED} className="byline">
-                  {byline}
-                </motion.p>
                 <motion.h1 layoutId="title" transition={SHARED} className="intro-title">
                   What’s in my bag?
                 </motion.h1>
                 <motion.p layoutId="summary" transition={SHARED} className="summary">
                   {summary}
                 </motion.p>
-                <motion.p
-                  className="intro-hint"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0, transition: { delay: 0.25, duration: 0.5 } }}
-                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
-                >
-                  go on, {hint} it <Arrow />
-                </motion.p>
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {phase === 'closed' && (
+              <motion.p
+                key="credit"
+                className="credit"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: { delay: 0.4, duration: 0.5 } }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              >
+                Made with <span aria-label="love">♥</span> by Gloria
+              </motion.p>
             )}
           </AnimatePresence>
 
@@ -455,21 +461,12 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {handCursor && <HandCursor dragging={!!dragging} />}
         </>
       )}
     </main>
   )
 }
 
-function Arrow() {
-  return (
-    <svg className="intro-arrow" viewBox="0 0 40 40" aria-hidden>
-      <path d="M8 6 C 22 10, 28 18, 24 32" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M17 27 L24 33 L29 25" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 function SoundIcon({ muted }: { muted: boolean }) {
   return (
