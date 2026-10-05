@@ -49,7 +49,8 @@ type Props = {
   onFocusOut: (id: string) => void
   onDragStart: (id: string) => void
   onDrag: (id: string, point: Point) => void
-  onDragEnd: (id: string, point: Point) => void
+  /** `tap` is a touch that only wobbled: treat it as a tap, not a put-down. */
+  onDragEnd: (id: string, point: Point, tap: boolean) => void
   registerRef: (id: string, el: HTMLElement | null) => void
 }
 
@@ -57,6 +58,8 @@ const OPEN_DELAY = 0.38
 const STAGGER = 0.12
 /** Keep dragged objects reachable: their centre stays this far inside the screen. */
 const EDGE = 36
+/** A finger can drift this far (px) and still count as a tap. */
+const TAP_SLOP = 12
 
 type Path = ReturnType<typeof paths>
 
@@ -149,6 +152,7 @@ export function BagObject(props: Props) {
   const dy = useMotionValue(0)
   const offset = useRef({ x: 0, y: 0 })
   const moved = useRef(false)
+  const touch = useRef(false)
 
   // Lean into the direction of travel while dragging.
   const vx = useVelocity(dx)
@@ -217,7 +221,10 @@ export function BagObject(props: Props) {
         dragConstraints={constraints}
         dragElastic={0.14}
         dragTransition={{ power: 0.18, timeConstant: 180, bounceStiffness: 420, bounceDamping: 32 }}
-        onPointerDownCapture={() => (moved.current = false)}
+        onPointerDownCapture={(e) => {
+          moved.current = false
+          touch.current = e.pointerType !== 'mouse'
+        }}
         onDragStart={() => {
           moved.current = true
           sound.tick(item.tone + 5)
@@ -225,8 +232,9 @@ export function BagObject(props: Props) {
         }}
         onDrag={(_, info) => props.onDrag(item.id, info.point)}
         onDragEnd={(_, info) => {
-          sound.pop(index)
-          props.onDragEnd(item.id, info.point)
+          const tap = touch.current && Math.hypot(info.offset.x, info.offset.y) < TAP_SLOP
+          if (!tap) sound.pop(index)
+          props.onDragEnd(item.id, info.point, tap)
         }}
         onDragTransitionEnd={() => {
           offset.current = { x: dx.get() / stage.width, y: dy.get() / stage.height }
