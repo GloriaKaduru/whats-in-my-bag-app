@@ -180,9 +180,11 @@ export default function App() {
     if (over !== overBag) setOverBag(over)
   }
 
-  const onDragEnd = (id: string, p: Point) => {
+  const onDragEnd = (id: string, p: Point, tap: boolean) => {
     setDragging(null)
     setOverBag(false)
+    // A wobbly finger tap: play the object's sound like any other tap.
+    if (tap) return inspect(id, true)
     if (inBag(p)) return packOne(id)
     // Put down: show its note again (which also counts it as found).
     inspect(id, false)
